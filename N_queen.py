@@ -1,103 +1,132 @@
-def init_piles(n): #sizes board based of original Nim game so 1 3 5 7 .... N, N+2=M, M+2 and so on
-    return [1 + 2*i for i in range(n)]
-
-def game_over(piles):
-    return not any(piles)
-
-def gen_moves(piles): #all possible moves the AI can make (Dont use high number if ya gonna test it
-    #to many sticks will have mannnnnnny moves)
-    moves = []
-    for i in range(len(piles)):
-        for take in range(1, piles[i] + 1):
-            moves.append((i, take))
-    return moves
+def success(state):
+   board = state[0]
+   return (len(board) == n)
 
 
-def apply_move(piles, move): #Makes a move
-    new = piles.copy()
-    new[move[0]] -= move[1]
-    return new
+def is_safe(board, row, col):
+   i = 0
+   while i < len(board):
+       if board[i] == row:
+           return False
+       if (board[i] + i) == (row + col) or (board[i] - i) == (row - col):
+           return False
+       i += 1
+   return True
 
-def eval_term(perspective, current):
-    return 1 if perspective == current else -1 #Evaluates kinda self explanitory
 
-def min_max_thing(piles, perspective, current, other):
-    if game_over(piles):
-        return eval_term(perspective, current), None
+def print_b(board):
+   r = 0
+   while r < n:
+       line = ""
+       c = 0
+       while c < n:
+           if c < len(board) and board[c] == r:
+               line += " Q "
+           else:
+               line += " - "
+           c += 1
+       print(line)
+       r += 1
 
-    best_max, best_min = -2, 2
-    best_max_move = best_min_move = None
 
-    for m in gen_moves(piles):
-        nxt = apply_move(piles, m)
-        score, _ = min_max_thing(nxt, perspective, other, current)
 
-        if score > best_max:
-            best_max, best_max_move = score, m
-            #Did add slightly agressive prune for garrunteed win or lose for timing on larger
-            #sets of data testing
-            if current == perspective and best_max == 1:
-                return best_max, best_max_move
-        if score < best_min:
-            best_min, best_min_move = score, m
-            if current != perspective and best_min == -1:
-                return best_min, best_min_move
 
-    if current == perspective:
-        return best_max, best_max_move
-    else:
-        return best_min, best_min_move
+def Score(state):
+   board = state[0]
+   col = len(board)
+   safe_rout = 0
+   for r in range(n):
+       if is_safe(board, r, col):
+           safe_rout += 1
+   score = len(board) + (safe_rout / float(n))
+   return -score
 
-def print_piles(piles): # Print curr baord with xor for user
-    w = max(piles).bit_length()
-    for p in piles:
-        print(p, ':', format(p, f"0{w}b"))
-    xor_val = 0
-    for p in piles:
-        xor_val ^= p
-    print("XOR:", format(xor_val, f"0{w}b"))
-    print()
+
+
+#PART 2
+def solve_bfs(initial_state, closed):
+   heap = []
+   tie = 0
+   initial_prior = Score(initial_state)
+   heapq.heappush(heap, (initial_prior, tie, initial_state))
+   tie += 1
+
+
+   while heap:
+       cur_pri, _, current_s = heapq.heappop(heap)
+       board = current_s[0]
+       if success(current_s):
+           print("BFS solution (moves):", current_s[1])
+           print_b(board)
+           return True
+
+
+       board_hash = tuple(board)
+       if board_hash in closed:
+           continue
+       closed.add(board_hash)
+
+
+       col = len(board)
+       for r in range(n):
+           if is_safe(board, r, col):
+               new_b = board + [r]
+               new_rout = current_s[1] + [(col, r)]
+               new_st = [new_b, new_rout]
+               new_pri = Score(new_st)
+               heapq.heappush(heap, (new_pri, tie, new_st))
+               tie += 1
+   print("No solution found by BFS.")
+   return False
+
+#PART 1
+def solve_dfs(state, closed, depth):
+   board = state[0]
+   if success(state):
+       print("DFS solution (moves):", state[1])
+       print_b(board)
+       return True
+
+
+   board_H = tuple(board)
+   if board_H in closed:
+       return False
+   closed.add(board_H)
+
+
+   col = len(board)
+   r = 0
+   found = False
+   while r < n:
+       if is_safe(board, r, col):
+           new_B = board + [r]
+           new_moves = state[1] + [(col, r)]
+           new_ST = [new_B, new_moves]
+           if solve_dfs(new_ST, closed, depth + 1):
+               found = True
+               break
+       r += 1
+   return found
+
 
 def run():
-    n = int(input("Number of piles? "))
-    mode = input("Mode (H for Human vs AI, A for AI vs AI)? ")
-    piles = init_piles(n)
-    move_count = 0
-    is_human_turn = True
+   global n
+   while(True):
+       try:
+           n = int(input("Enter board size for N-Queens: "))
+       except (ValueError):
+           continue
 
 
-    if mode == 'A':
-        first, second = 'A1', 'A2'
-    else:
-        first, second = 'H', 'A'
+       closed = set()
+       init_State = [[], []]
+       if not solve_dfs(init_State, closed, 0):
+           print("No solution found by DFS.")
 
-    print_piles(piles)
-    while True:
-        if is_human_turn:
-            current, other = first, second
-        else:
-            current, other = second, first
 
-        # Decide move
-        if current == 'H':
-            r, c = input("Your move (pile count)? ").split()
-            choice = (int(r) - 1, int(c))
-        else:
-            score, choice = min_max_thing(piles, current, current, other)
-            print(current, "chooses pile", choice[0] + 1,
-                  "take", choice[1], "(score", score, ")")
+       closed2 = set()
+       init_state2 = [[], []]
+       solve_bfs(init_state2, closed2)
 
-        piles = apply_move(piles, choice)
-        move_count += 1
-        print("After move", move_count)
-        print_piles(piles)
 
-        if game_over(piles):
-            print(other, "wins")
-            break
-
-        is_human_turn = not is_human_turn
-
-if __name__ == '__main__':
-    while True:
-        run()
+run()
